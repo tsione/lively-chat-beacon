@@ -8,12 +8,11 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useChat } from '@/hooks/useChat';
-import AuthForm from '@/components/AuthForm';
 
 const Index = () => {
   const [currentMessage, setCurrentMessage] = useState('');
   const [username, setUsername] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   
@@ -35,12 +34,19 @@ const Index = () => {
     scrollToBottom();
   }, [messages]);
 
-  const handleAuthSuccess = async (authenticatedUsername: string) => {
-    setUsername(authenticatedUsername);
-    setIsAuthenticated(true);
-    
+  const handleConnect = async () => {
+    if (!username.trim()) {
+      toast({
+        title: "Username required",
+        description: "Please enter a username to join the chat",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      await connect(authenticatedUsername);
+      await connect(username);
+      setIsConnected(true);
     } catch (error) {
       console.error('Failed to connect to chat service:', error);
       toast({
@@ -67,12 +73,41 @@ const Index = () => {
 
   const handleDisconnect = () => {
     disconnect();
-    setIsAuthenticated(false);
+    setIsConnected(false);
     setUsername('');
   };
 
-  if (!isAuthenticated) {
-    return <AuthForm onAuthSuccess={handleAuthSuccess} />;
+  if (!isConnected) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageCircle className="h-6 w-6" />
+              Join Chat
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Input
+                placeholder="Enter your username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleConnect()}
+                disabled={loading}
+              />
+            </div>
+            <Button 
+              onClick={handleConnect} 
+              className="w-full"
+              disabled={loading || !username.trim()}
+            >
+              {loading ? 'Connecting...' : 'Join Chat'}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (

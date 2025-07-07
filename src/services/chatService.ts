@@ -1,6 +1,5 @@
 
 import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
 
 export interface ChatMessage {
   id: string;
@@ -20,7 +19,7 @@ export class ChatService {
   private client: Client | null = null;
   private connected = false;
 
-  constructor(private serverUrl: string = 'http://localhost:8080/ws') {
+  constructor(private serverUrl: string = 'ws://localhost:8080/ws') {
     console.log('ChatService initialized with URL:', serverUrl);
   }
 
@@ -29,11 +28,12 @@ export class ChatService {
       try {
         console.log('Creating STOMP client for URL:', this.serverUrl);
         
-        // Create STOMP client with SockJS
+        // Create STOMP client with direct WebSocket connection
         this.client = new Client({
-          webSocketFactory: () => new SockJS(this.serverUrl),
+          brokerURL: this.serverUrl,
           connectHeaders: {
             username: username,
+            passcode: 'secret-key-123'
           },
           debug: (str) => {
             console.log('STOMP Debug:', str);
