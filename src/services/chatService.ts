@@ -20,13 +20,15 @@ export class ChatService {
   private client: Client | null = null;
   private connected = false;
 
-  constructor(private serverUrl: string = 'ws://localhost:8080/ws') {
+  constructor(private serverUrl: string = 'http://localhost:8080/ws') {
     console.log('ChatService initialized with URL:', serverUrl);
   }
 
   connect(username: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
+        console.log('Creating STOMP client for URL:', this.serverUrl);
+        
         // Create STOMP client with SockJS
         this.client = new Client({
           webSocketFactory: () => new SockJS(this.serverUrl),
@@ -52,17 +54,31 @@ export class ChatService {
         this.client.onStompError = (frame) => {
           console.error('STOMP error:', frame);
           this.connected = false;
-          reject(new Error(`STOMP error: ${frame.headers['message']}`));
+          reject(new Error(`STOMP error: ${frame.headers['message'] || 'Unknown error'}`));
         };
 
         // WebSocket error callback
         this.client.onWebSocketError = (error) => {
           console.error('WebSocket error:', error);
           this.connected = false;
-          reject(error);
+          reject(new Error('WebSocket connection failed. Please check if the server is running on localhost:8080'));
         };
 
+        // WebSocket close callback
+        this.client.onWebSocketClose = (event) => {
+          console.log('WebSocket connection closed:', event);
+          this.connected = false;
+        };
+
+        // Set connection timeout
+        setTimeout(() => {
+          if (!this.connected) {
+            reject(new Error('Connection timeout. Server may be unavailable.'));
+          }
+        }, 10000); // 10 second timeout
+
         // Activate the client
+        console.log('Activating STOMP client...');
         this.client.activate();
       } catch (error) {
         console.error('Failed to create STOMP client:', error);
@@ -73,13 +89,15 @@ export class ChatService {
 
   subscribeToMessages(callback: (message: ChatMessage) => void): () => void {
     if (!this.client || !this.connected) {
-      console.warn('Cannot subscribe: client not connected');
+      console.warn('Cannot subscribe to messages: client not connected');
       return () => {};
     }
 
     const subscription = this.client.subscribe('/topic/messages', (message) => {
       try {
         const parsedMessage: ChatMessage = JSON.parse(message.body);
+        // Ensure timestamp is a Date object
+        parsedMessage.timestamp = new Date(parsedMessage.timestamp);
         callback(parsedMessage);
       } catch (error) {
         console.error('Failed to parse message:', error);
@@ -91,13 +109,17 @@ export class ChatService {
 
   subscribeToUsers(callback: (users: ChatUser[]) => void): () => void {
     if (!this.client || !this.connected) {
-      console.warn('Cannot subscribe: client not connected');
+      console.warn('Cannot subscribe to users: client not connected');
       return () => {};
     }
 
     const subscription = this.client.subscribe('/topic/users', (message) => {
       try {
         const users: ChatUser[] = JSON.parse(message.body);
+        // Ensure joinedAt is a Date object
+        users.forEach(user => {
+          user.joinedAt = new Date(user.joinedAt);
+        });
         callback(users);
       } catch (error) {
         console.error('Failed to parse users:', error);
@@ -118,6 +140,7 @@ export class ChatService {
       timestamp: new Date().toISOString(),
     };
 
+    console.log('Publishing message to /app/chat.sendMessage:', message);
     this.client.publish({
       destination: '/app/chat.sendMessage',
       body: JSON.stringify(message),

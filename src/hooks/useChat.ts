@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { chatService, ChatMessage, ChatUser } from '@/services/chatService';
 import { useToast } from '@/hooks/use-toast';
 
@@ -21,47 +21,58 @@ export const useChat = () => {
     }
 
     setLoading(true);
+    console.log('Attempting to connect to WebSocket server...');
+    
     try {
       await chatService.connect(username);
       setConnected(true);
       
       // Subscribe to messages
-      const unsubscribeMessages = chatService.subscribeToMessages((message) => {
+      chatService.subscribeToMessages((message) => {
+        console.log('Received message:', message);
         setMessages(prev => [...prev, message]);
       });
 
       // Subscribe to user updates
-      const unsubscribeUsers = chatService.subscribeToUsers((users) => {
+      chatService.subscribeToUsers((users) => {
+        console.log('Updated users:', users);
         setActiveUsers(users);
       });
+
+      // Add system message for successful connection
+      const joinMessage: ChatMessage = {
+        id: Date.now().toString(),
+        sender: 'System',
+        content: `${username} joined the chat`,
+        timestamp: new Date(),
+        type: 'system'
+      };
+      setMessages(prev => [...prev, joinMessage]);
 
       toast({
         title: "Connected!",
         description: "You've successfully joined the chat",
       });
 
-      // Store unsubscribe functions for cleanup
-      return () => {
-        unsubscribeMessages();
-        unsubscribeUsers();
-      };
+      return true;
     } catch (error) {
-      console.error('Failed to connect to chat:', error);
+      console.error('Failed to connect to chat service:', error);
+      setConnected(false);
+      
       toast({
         title: "Connection failed",
-        description: "Could not connect to chat service. Using demo mode.",
+        description: "Could not connect to the WebSocket server at localhost:8080. Please ensure the server is running.",
         variant: "destructive",
       });
       
-      // Fallback to demo mode
-      setConnected(true);
-      return () => {};
+      throw error;
     } finally {
       setLoading(false);
     }
   }, [toast]);
 
   const disconnect = useCallback(() => {
+    console.log('Disconnecting from chat service...');
     chatService.disconnect();
     setConnected(false);
     setMessages([]);
@@ -76,19 +87,8 @@ export const useChat = () => {
   const sendMessage = useCallback((content: string) => {
     if (!content.trim() || !connected) return;
 
-    if (chatService.isConnected()) {
-      chatService.sendMessage(content);
-    } else {
-      // Demo mode - add message locally
-      const newMessage: ChatMessage = {
-        id: Date.now().toString(),
-        sender: 'You',
-        content,
-        timestamp: new Date(),
-        type: 'message'
-      };
-      setMessages(prev => [...prev, newMessage]);
-    }
+    console.log('Sending message:', content);
+    chatService.sendMessage(content);
   }, [connected]);
 
   return {

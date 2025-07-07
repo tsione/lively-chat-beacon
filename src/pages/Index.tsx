@@ -1,7 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
+import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, Users, Send, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,32 +7,25 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
+import { useChat } from '@/hooks/useChat';
 import AuthForm from '@/components/AuthForm';
 
-interface Message {
-  id: string;
-  sender: string;
-  content: string;
-  timestamp: Date;
-  type: 'message' | 'system';
-}
-
-interface User {
-  id: string;
-  name: string;
-  joinedAt: Date;
-}
-
 const Index = () => {
-  const [client, setClient] = useState<Client | null>(null);
-  const [connected, setConnected] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [activeUsers, setActiveUsers] = useState<User[]>([]);
   const [currentMessage, setCurrentMessage] = useState('');
   const [username, setUsername] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  
+  const {
+    connected,
+    messages,
+    activeUsers,
+    loading,
+    connect,
+    disconnect,
+    sendMessage,
+  } = useChat();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -44,81 +35,40 @@ const Index = () => {
     scrollToBottom();
   }, [messages]);
 
-  const handleAuthSuccess = (authenticatedUsername: string) => {
+  const handleAuthSuccess = async (authenticatedUsername: string) => {
     setUsername(authenticatedUsername);
     setIsAuthenticated(true);
-    connectToChat(authenticatedUsername);
-  };
-
-  // Initialize WebSocket connection
-  const connectToChat = (user: string) => {
-    console.log('Connecting to chat service...');
     
-    // Simulate connection
-    setTimeout(() => {
-      setConnected(true);
-      
-      // Add system message
-      const joinMessage: Message = {
-        id: Date.now().toString(),
-        sender: 'System',
-        content: `${user} joined the chat`,
-        timestamp: new Date(),
-        type: 'system'
-      };
-      setMessages(prev => [...prev, joinMessage]);
-      
-      // Add user to active users
-      const newUser: User = {
-        id: Date.now().toString(),
-        name: user,
-        joinedAt: new Date()
-      };
-      setActiveUsers(prev => [...prev, newUser]);
-      
+    try {
+      await connect(authenticatedUsername);
+    } catch (error) {
+      console.error('Failed to connect to chat service:', error);
       toast({
-        title: "Connected!",
-        description: "You've successfully joined the chat",
+        title: "Connection failed",
+        description: "Unable to connect to chat service. Please check if the server is running.",
+        variant: "destructive",
       });
-    }, 1000);
+    }
   };
 
-  const sendMessage = () => {
+  const handleSendMessage = () => {
     if (!currentMessage.trim() || !connected) return;
-
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      sender: username,
-      content: currentMessage,
-      timestamp: new Date(),
-      type: 'message'
-    };
-
-    setMessages(prev => [...prev, newMessage]);
-    setCurrentMessage('');
     
-    console.log('Sending message via STOMP:', newMessage);
+    sendMessage(currentMessage);
+    setCurrentMessage('');
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      handleSendMessage();
     }
   };
 
-  const disconnectFromChat = () => {
-    setConnected(false);
+  const handleDisconnect = () => {
+    disconnect();
     setIsAuthenticated(false);
-    setMessages([]);
-    setActiveUsers([]);
-    setCurrentMessage('');
     setUsername('');
-    
-    toast({
-      title: "Disconnected",
-      description: "You've left the chat",
-    });
   };
 
   if (!isAuthenticated) {
@@ -135,10 +85,10 @@ const Index = () => {
             <h1 className="text-2xl font-bold text-gray-800">Chat Service</h1>
             <Badge variant={connected ? "default" : "destructive"} className="flex items-center gap-1">
               {connected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-              {connected ? 'Connected' : 'Disconnected'}
+              {loading ? 'Connecting...' : connected ? 'Connected' : 'Disconnected'}
             </Badge>
           </div>
-          <Button onClick={disconnectFromChat} variant="outline">
+          <Button onClick={handleDisconnect} variant="outline">
             Leave Chat
           </Button>
         </div>
@@ -207,16 +157,16 @@ const Index = () => {
             <CardContent className="pt-4">
               <div className="flex gap-2">
                 <Input
-                  placeholder="Type your message..."
+                  placeholder={connected ? "Type your message..." : "Connecting..."}
                   value={currentMessage}
                   onChange={(e) => setCurrentMessage(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  disabled={!connected}
+                  disabled={!connected || loading}
                   className="flex-1"
                 />
                 <Button 
-                  onClick={sendMessage} 
-                  disabled={!connected || !currentMessage.trim()}
+                  onClick={handleSendMessage} 
+                  disabled={!connected || !currentMessage.trim() || loading}
                   size="icon"
                 >
                   <Send className="h-4 w-4" />
