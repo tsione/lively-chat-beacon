@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
+import AuthForm from '@/components/AuthForm';
 
 interface Message {
   id: string;
@@ -31,7 +32,7 @@ const Index = () => {
   const [activeUsers, setActiveUsers] = useState<User[]>([]);
   const [currentMessage, setCurrentMessage] = useState('');
   const [username, setUsername] = useState('');
-  const [isJoined, setIsJoined] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -43,31 +44,25 @@ const Index = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Initialize WebSocket connection
-  const connectToChat = () => {
-    if (!username.trim()) {
-      toast({
-        title: "Username required",
-        description: "Please enter a username to join the chat",
-        variant: "destructive",
-      });
-      return;
-    }
+  const handleAuthSuccess = (authenticatedUsername: string) => {
+    setUsername(authenticatedUsername);
+    setIsAuthenticated(true);
+    connectToChat(authenticatedUsername);
+  };
 
-    // For demo purposes, we'll simulate a WebSocket connection
-    // In a real application, you would connect to your actual backend
+  // Initialize WebSocket connection
+  const connectToChat = (user: string) => {
     console.log('Connecting to chat service...');
     
     // Simulate connection
     setTimeout(() => {
       setConnected(true);
-      setIsJoined(true);
       
       // Add system message
       const joinMessage: Message = {
         id: Date.now().toString(),
         sender: 'System',
-        content: `${username} joined the chat`,
+        content: `${user} joined the chat`,
         timestamp: new Date(),
         type: 'system'
       };
@@ -76,7 +71,7 @@ const Index = () => {
       // Add user to active users
       const newUser: User = {
         id: Date.now().toString(),
-        name: username,
+        name: user,
         joinedAt: new Date()
       };
       setActiveUsers(prev => [...prev, newUser]);
@@ -114,10 +109,11 @@ const Index = () => {
 
   const disconnectFromChat = () => {
     setConnected(false);
-    setIsJoined(false);
+    setIsAuthenticated(false);
     setMessages([]);
     setActiveUsers([]);
     setCurrentMessage('');
+    setUsername('');
     
     toast({
       title: "Disconnected",
@@ -125,38 +121,8 @@ const Index = () => {
     });
   };
 
-  if (!isJoined) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="flex items-center justify-center gap-2 text-2xl">
-              <MessageCircle className="h-8 w-8 text-blue-600" />
-              Join Chat
-            </CardTitle>
-            <p className="text-muted-foreground">
-              Enter your username to start chatting
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Input
-              placeholder="Enter your username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && connectToChat()}
-              maxLength={20}
-            />
-            <Button 
-              onClick={connectToChat} 
-              className="w-full"
-              disabled={!username.trim()}
-            >
-              Join Chat
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
+  if (!isAuthenticated) {
+    return <AuthForm onAuthSuccess={handleAuthSuccess} />;
   }
 
   return (
