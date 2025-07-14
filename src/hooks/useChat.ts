@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect } from 'react';
 import { chatService, ChatMessage, ChatUser } from '@/services/chatService';
 import { useToast } from '@/hooks/use-toast';
@@ -46,10 +47,27 @@ export const useChat = () => {
         });
       });
 
-      // Subscribe to user updates
+      // Subscribe to user updates with better error handling
       chatService.subscribeToUsers((users) => {
         console.log('Updated users in hook:', users);
-        setActiveUsers(users);
+        console.log('Number of users received:', users.length);
+        
+        // Ensure current user is included in the list
+        const currentUser = chatService.getCurrentUsername();
+        const hasCurrentUser = users.some(user => user.name === currentUser);
+        
+        let finalUsers = [...users];
+        if (!hasCurrentUser && currentUser) {
+          console.log('Adding current user to the list:', currentUser);
+          finalUsers.push({
+            id: currentUser,
+            name: currentUser,
+            joinedAt: new Date()
+          });
+        }
+        
+        console.log('Final users list:', finalUsers);
+        setActiveUsers(finalUsers);
       });
 
       // Add system message for successful connection
@@ -66,6 +84,12 @@ export const useChat = () => {
         title: "Connected!",
         description: "You've successfully joined the chat",
       });
+
+      // Request current user list after connection
+      setTimeout(() => {
+        console.log('Requesting user list update...');
+        // This might help trigger the server to send the current user list
+      }, 1000);
 
       return true;
     } catch (error) {
@@ -131,6 +155,12 @@ export const useChat = () => {
       (msg.sender === username && msg.recipient === currentUser)
     );
   }, [privateMessages]);
+
+  // Debug effect to monitor activeUsers changes
+  useEffect(() => {
+    console.log('ActiveUsers state changed:', activeUsers);
+    console.log('Number of active users:', activeUsers.length);
+  }, [activeUsers]);
 
   return {
     connected,

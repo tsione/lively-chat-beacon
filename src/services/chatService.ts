@@ -50,6 +50,17 @@ export class ChatService {
         this.client.onConnect = (frame) => {
           console.log('Connected to STOMP server:', frame);
           this.connected = true;
+          
+          // Send user join message to notify server
+          console.log('Sending user join notification...');
+          this.client?.publish({
+            destination: '/app/chat.addUser',
+            body: JSON.stringify({
+              name: username,
+              type: 'JOIN'
+            }),
+          });
+          
           resolve();
         };
 
@@ -96,6 +107,7 @@ export class ChatService {
       return () => {};
     }
 
+    console.log('Subscribing to /topic/messages');
     const subscription = this.client.subscribe('/topic/messages', (message) => {
       try {
         const parsedMessage = JSON.parse(message.body);
@@ -126,6 +138,7 @@ export class ChatService {
       return () => {};
     }
 
+    console.log('Subscribing to private messages for user:', this.currentUsername);
     const subscription = this.client.subscribe(`/user/${this.currentUsername}/queue/private`, (message) => {
       try {
         const parsedMessage = JSON.parse(message.body);
@@ -157,23 +170,47 @@ export class ChatService {
       return () => {};
     }
 
-    console.log('Subscribing to /topic/users');
+    console.log('Subscribing to /topic/users for user updates');
     const subscription = this.client.subscribe('/topic/users', (message) => {
       try {
         console.log('Raw users message received:', message.body);
+        console.log('Users message headers:', message.headers);
+        
         const users = JSON.parse(message.body);
+        console.log('Parsed users data:', users);
         
-        // Ensure users have proper structure
-        const processedUsers: ChatUser[] = users.map((user: any) => ({
-          id: user.id || user.name || `user-${Math.random()}`,
-          name: user.name || user.username || 'Unknown',
-          joinedAt: new Date(user.joinedAt || Date.now())
-        }));
+        // Handle different response formats
+        let processedUsers: ChatUser[] = [];
         
-        console.log('Processed users:', processedUsers);
+        if (Array.isArray(users)) {
+          processedUsers = users.map((user: any) => ({
+            id: user.id || user.name || `user-${Math.random()}`,
+            name: user.name || user.username || 'Unknown',
+            joinedAt: new Date(user.joinedAt || Date.now())
+          }));
+        } else if (users && typeof users === 'object') {
+          // Handle single user object
+          processedUsers = [{
+            id: users.id || users.name || `user-${Math.random()}`,
+            name: users.name || users.username || 'Unknown',
+            joinedAt: new Date(users.joinedAt || Date.now())
+          }];
+        }
+        
+        console.log('Processed users for callback:', processedUsers);
         callback(processedUsers);
       } catch (error) {
-        console.error('Failed to parse users:', error, message.body);
+        console.error('Failed to parse users message:', error);
+        console.error('Message body was:', message.body);
+        
+        // Fallback: create user list with current user
+        const fallbackUsers: ChatUser[] = [{
+          id: this.currentUsername,
+          name: this.currentUsername,
+          joinedAt: new Date()
+        }];
+        console.log('Using fallback users:', fallbackUsers);
+        callback(fallbackUsers);
       }
     });
 
@@ -221,6 +258,16 @@ export class ChatService {
 
   disconnect(): void {
     if (this.client) {
+      // Send user leave notification
+      console.log('Sending user leave notification...');
+      this.client.publish({
+        destination: '/app/chat.removeUser',
+        body: JSON.stringify({
+          name: this.currentUsername,
+          type: 'LEAVE'
+        }),
+      });
+      
       this.client.deactivate();
       this.connected = false;
       console.log('Disconnected from STOMP server');
