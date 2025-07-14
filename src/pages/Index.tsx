@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, Users, Send, Wifi, WifiOff } from 'lucide-react';
+import { MessageCircle, Users, Send, Wifi, WifiOff, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,11 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useChat } from '@/hooks/useChat';
+import { PrivateChat } from '@/components/PrivateChat';
 
 const Index = () => {
   const [currentMessage, setCurrentMessage] = useState('');
   const [username, setUsername] = useState('');
   const [isConnected, setIsConnected] = useState(false);
+  const [openPrivateChats, setOpenPrivateChats] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   
@@ -21,9 +23,13 @@ const Index = () => {
     messages,
     activeUsers,
     loading,
+    selectedUser,
     connect,
     disconnect,
     sendMessage,
+    sendPrivateMessage,
+    setSelectedUser,
+    getPrivateMessagesForUser,
   } = useChat();
 
   const scrollToBottom = () => {
@@ -75,6 +81,21 @@ const Index = () => {
     disconnect();
     setIsConnected(false);
     setUsername('');
+    setOpenPrivateChats([]);
+  };
+
+  const handleOpenPrivateChat = (userName: string) => {
+    if (!openPrivateChats.includes(userName) && userName !== username) {
+      setOpenPrivateChats(prev => [...prev, userName]);
+    }
+  };
+
+  const handleClosePrivateChat = (userName: string) => {
+    setOpenPrivateChats(prev => prev.filter(name => name !== userName));
+  };
+
+  const handleSendPrivateMessage = (content: string, recipient: string) => {
+    sendPrivateMessage(content, recipient);
   };
 
   if (!isConnected) {
@@ -140,9 +161,21 @@ const Index = () => {
             <CardContent className="flex-1 overflow-y-auto">
               <div className="space-y-2">
                 {activeUsers.map((user) => (
-                  <div key={user.id} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span className="font-medium">{user.name}</span>
+                  <div key={user.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="font-medium">{user.name}</span>
+                    </div>
+                    {user.name !== username && (
+                      <Button
+                        onClick={() => handleOpenPrivateChat(user.name)}
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0"
+                      >
+                        <MessageSquare className="h-3 w-3" />
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -152,7 +185,7 @@ const Index = () => {
           {/* Chat Area */}
           <Card className="flex-1 flex flex-col">
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Messages</CardTitle>
+              <CardTitle className="text-lg">Public Chat</CardTitle>
             </CardHeader>
             <Separator />
             
@@ -210,6 +243,19 @@ const Index = () => {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* Private Chat Windows */}
+      <div className="fixed bottom-4 right-4 flex gap-2">
+        {openPrivateChats.map((chatUser) => (
+          <PrivateChat
+            key={chatUser}
+            recipient={chatUser}
+            messages={getPrivateMessagesForUser(chatUser)}
+            onClose={() => handleClosePrivateChat(chatUser)}
+            onSendMessage={handleSendPrivateMessage}
+          />
+        ))}
       </div>
     </div>
   );

@@ -4,9 +4,10 @@ import { Client } from '@stomp/stompjs';
 export interface ChatMessage {
   id: string;
   sender: string;
+  recipient?: string; // For private messages
   content: string;
   timestamp: Date;
-  type: 'message' | 'system';
+  type: 'message' | 'system' | 'private';
 }
 
 export interface ChatUser {
@@ -18,12 +19,14 @@ export interface ChatUser {
 export class ChatService {
   private client: Client | null = null;
   private connected = false;
+  private currentUsername: string = '';
 
   constructor(private serverUrl: string = 'ws://localhost:8080/ws') {
     console.log('ChatService initialized with URL:', serverUrl);
   }
 
   connect(username: string): Promise<void> {
+    this.currentUsername = username;
     return new Promise((resolve, reject) => {
       try {
         console.log('Creating STOMP client for URL:', this.serverUrl);
@@ -107,6 +110,27 @@ export class ChatService {
     return () => subscription.unsubscribe();
   }
 
+  subscribeToPrivateMessages(callback: (message: ChatMessage) => void): () => void {
+    if (!this.client || !this.connected) {
+      console.warn('Cannot subscribe to private messages: client not connected');
+      return () => {};
+    }
+
+    const subscription = this.client.subscribe(`/user/${this.currentUsername}/queue/private`, (message) => {
+      try {
+        const parsedMessage: ChatMessage = JSON.parse(message.body);
+        // Ensure timestamp is a Date object
+        parsedMessage.timestamp = new Date(parsedMessage.timestamp);
+        parsedMessage.type = 'private';
+        callback(parsedMessage);
+      } catch (error) {
+        console.error('Failed to parse private message:', error);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }
+
   subscribeToUsers(callback: (users: ChatUser[]) => void): () => void {
     if (!this.client || !this.connected) {
       console.warn('Cannot subscribe to users: client not connected');
@@ -147,6 +171,25 @@ export class ChatService {
     });
   }
 
+  sendPrivateMessage(content: string, recipient: string): void {
+    if (!this.client || !this.connected) {
+      console.warn('Cannot send private message: client not connected');
+      return;
+    }
+
+    const message = {
+      content,
+      recipient,
+      timestamp: new Date().toISOString(),
+    };
+
+    console.log('Publishing private message to /app/chat.sendPrivateMessage:', message);
+    this.client.publish({
+      destination: '/app/chat.sendPrivateMessage',
+      body: JSON.stringify(message),
+    });
+  }
+
   disconnect(): void {
     if (this.client) {
       this.client.deactivate();
@@ -157,6 +200,10 @@ export class ChatService {
 
   isConnected(): boolean {
     return this.connected;
+  }
+
+  getCurrentUsername(): string {
+    return this.currentUsername;
   }
 }
 
