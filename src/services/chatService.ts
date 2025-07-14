@@ -98,12 +98,22 @@ export class ChatService {
 
     const subscription = this.client.subscribe('/topic/messages', (message) => {
       try {
-        const parsedMessage: ChatMessage = JSON.parse(message.body);
-        // Ensure timestamp is a Date object
-        parsedMessage.timestamp = new Date(parsedMessage.timestamp);
-        callback(parsedMessage);
+        const parsedMessage = JSON.parse(message.body);
+        console.log('Raw received message:', parsedMessage);
+        
+        // Create a proper ChatMessage object with required fields
+        const chatMessage: ChatMessage = {
+          id: parsedMessage.id || `msg-${Date.now()}-${Math.random()}`,
+          sender: parsedMessage.sender || 'Unknown',
+          content: parsedMessage.content || '',
+          timestamp: new Date(parsedMessage.timestamp),
+          type: 'message'
+        };
+        
+        console.log('Processed chat message:', chatMessage);
+        callback(chatMessage);
       } catch (error) {
-        console.error('Failed to parse message:', error);
+        console.error('Failed to parse message:', error, message.body);
       }
     });
 
@@ -118,11 +128,21 @@ export class ChatService {
 
     const subscription = this.client.subscribe(`/user/${this.currentUsername}/queue/private`, (message) => {
       try {
-        const parsedMessage: ChatMessage = JSON.parse(message.body);
-        // Ensure timestamp is a Date object
-        parsedMessage.timestamp = new Date(parsedMessage.timestamp);
-        parsedMessage.type = 'private';
-        callback(parsedMessage);
+        const parsedMessage = JSON.parse(message.body);
+        console.log('Raw received private message:', parsedMessage);
+        
+        // Create a proper ChatMessage object
+        const chatMessage: ChatMessage = {
+          id: parsedMessage.id || `private-${Date.now()}-${Math.random()}`,
+          sender: parsedMessage.sender || 'Unknown',
+          recipient: parsedMessage.recipient,
+          content: parsedMessage.content || '',
+          timestamp: new Date(parsedMessage.timestamp),
+          type: 'private'
+        };
+        
+        console.log('Processed private message:', chatMessage);
+        callback(chatMessage);
       } catch (error) {
         console.error('Failed to parse private message:', error);
       }
@@ -137,16 +157,23 @@ export class ChatService {
       return () => {};
     }
 
+    console.log('Subscribing to /topic/users');
     const subscription = this.client.subscribe('/topic/users', (message) => {
       try {
-        const users: ChatUser[] = JSON.parse(message.body);
-        // Ensure joinedAt is a Date object
-        users.forEach(user => {
-          user.joinedAt = new Date(user.joinedAt);
-        });
-        callback(users);
+        console.log('Raw users message received:', message.body);
+        const users = JSON.parse(message.body);
+        
+        // Ensure users have proper structure
+        const processedUsers: ChatUser[] = users.map((user: any) => ({
+          id: user.id || user.name || `user-${Math.random()}`,
+          name: user.name || user.username || 'Unknown',
+          joinedAt: new Date(user.joinedAt || Date.now())
+        }));
+        
+        console.log('Processed users:', processedUsers);
+        callback(processedUsers);
       } catch (error) {
-        console.error('Failed to parse users:', error);
+        console.error('Failed to parse users:', error, message.body);
       }
     });
 
@@ -161,6 +188,7 @@ export class ChatService {
 
     const message = {
       content,
+      sender: this.currentUsername,
       timestamp: new Date().toISOString(),
     };
 
@@ -180,6 +208,7 @@ export class ChatService {
     const message = {
       content,
       recipient,
+      sender: this.currentUsername,
       timestamp: new Date().toISOString(),
     };
 

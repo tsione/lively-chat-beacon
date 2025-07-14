@@ -1,5 +1,4 @@
-
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { chatService, ChatMessage, ChatUser } from '@/services/chatService';
 import { useToast } from '@/hooks/use-toast';
 
@@ -31,13 +30,13 @@ export const useChat = () => {
       
       // Subscribe to public messages
       chatService.subscribeToMessages((message) => {
-        console.log('Received public message:', message);
+        console.log('Received public message in hook:', message);
         setMessages(prev => [...prev, message]);
       });
 
       // Subscribe to private messages
       chatService.subscribeToPrivateMessages((message) => {
-        console.log('Received private message:', message);
+        console.log('Received private message in hook:', message);
         setPrivateMessages(prev => [...prev, message]);
         
         // Show toast notification for private messages
@@ -49,13 +48,13 @@ export const useChat = () => {
 
       // Subscribe to user updates
       chatService.subscribeToUsers((users) => {
-        console.log('Updated users:', users);
+        console.log('Updated users in hook:', users);
         setActiveUsers(users);
       });
 
       // Add system message for successful connection
       const joinMessage: ChatMessage = {
-        id: Date.now().toString(),
+        id: `system-${Date.now()}`,
         sender: 'System',
         content: `${username} joined the chat`,
         timestamp: new Date(),
@@ -115,7 +114,7 @@ export const useChat = () => {
     
     // Add the message to local state for display
     const privateMessage: ChatMessage = {
-      id: Date.now().toString(),
+      id: `private-${Date.now()}-${Math.random()}`,
       sender: chatService.getCurrentUsername(),
       recipient,
       content,
